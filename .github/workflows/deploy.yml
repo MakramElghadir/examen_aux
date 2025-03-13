@@ -1,0 +1,51 @@
+name: Fetch and Save Weather Data
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  weather_api_request:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      with:
+        persist-credentials: false  # Ensure we use a PAT for authentication
+
+    - name: Install dependencies
+      run: sudo apt-get install -y curl jq
+
+    - name: Fetch Meteostat API Data and Save to File
+      env:
+        METEOSTAT_API_KEY: ${{ secrets.METEOSTAT_API_KEY }}
+      run: |
+        TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")  # Generate timestamp
+        FILE_PATH="weather_data_${TIMESTAMP}.txt"  # File at the root of the repo
+
+        API_URL="https://meteostat.p.rapidapi.com/point/monthly?lat=52.5244&lon=13.4105&alt=43&start=2020-01-01&end=2020-12-31"
+
+        RESPONSE=$(curl -s --request GET "$API_URL" \
+          --header "x-rapidapi-host: meteostat.p.rapidapi.com" \
+          --header "x-rapidapi-key: $METEOSTAT_API_KEY")
+
+        echo "$RESPONSE" | jq . > "$FILE_PATH"  # Save formatted JSON to the file
+
+        echo "File saved at: $FILE_PATH"
+
+    - name: Show Generated File
+      run: ls -la  # Show the created file in logs
+
+    
+    - name: Commit and Push File to Repository
+      env:
+        PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git add weather_data_*.txt
+        git commit -m "Add weather data file: $(date +"%Y-%m-%d %H:%M:%S")" || echo "No changes to commit"
+        git push https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git HEAD:main || echo "No changes to push"
+
